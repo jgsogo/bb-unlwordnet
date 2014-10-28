@@ -2,12 +2,15 @@
 # -*- coding: utf-8 -*-
 
 import sqlite3
+import os
 
 from uw import UniversalWord
 
+db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp/unl.db')
+
 class UNLWordNet():
 
-    def __init__(self, db='unlwn21.db'):
+    def __init__(self, db=db_path):
         self.db = db
         self.con = sqlite3.connect(self.db)
 

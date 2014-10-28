@@ -9,36 +9,39 @@ class UNLWordNetCfg():
 
     def _download(self, url, filename):
         u = urllib2.urlopen(url)
-        meta = u.info()
-        file_size = int(meta.getheaders("Content-Length")[0])
+        try:
+            meta = u.info()
+            file_size = int(meta.getheaders("Content-Length")[0])
 
-        # Check file and filesize
-        if os.path.isfile(filename) and os.path.getsize(filename) == file_size:
-            return
+            # Check file and filesize
+            if os.path.isfile(filename) and os.path.getsize(filename) == file_size:
+                return
+        except:
+            file_size = 100
+        finally:
+            f = open(filename, 'wb')
+            self.stdout.write("\tDownloading: %s Bytes: %s" % (filename, file_size))
+            file_size_dl = 0
+            block_sz = 8192
+            while True:
+                buffer = u.read(block_sz)
+                if not buffer:
+                    break
 
-        f = open(filename, 'wb')
-        self.stdout.write("\tDownloading: %s Bytes: %s" % (filename, file_size))
-        file_size_dl = 0
-        block_sz = 8192
-        while True:
-            buffer = u.read(block_sz)
-            if not buffer:
-                break
-
-            file_size_dl += len(buffer)
-            f.write(buffer)
-            status = r"%10d  [%3.2f%%]" % (file_size_dl, file_size_dl * 100. / file_size)
-            status = status + chr(8)*(len(status)+1)
-            self.stdout.write('\t' + status)
-        self.stdout.write('\n\tdownloaded to file %r' % filename)
-        f.close()
+                file_size_dl += len(buffer)
+                f.write(buffer)
+                status = r"%10d  [%3.2f%%]" % (file_size_dl, file_size_dl * 100. / file_size)
+                status = status + chr(8)*(len(status)+1)
+                self.stdout.write('\t' + status)
+            self.stdout.write('\n\tdownloaded to file %r' % filename)
+            f.close()
 
     def _safe_create(self, directory, safe=True):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
     def install(self, tmp_dir=None, reinstall=False):
-        me = os.path.dirname(__file__)
+        me = os.path.dirname(os.path.abspath(__file__))
 
         # Create work directory
         tmp_dir = tmp_dir or os.path.join(me, 'tmp')
@@ -57,24 +60,32 @@ class UNLWordNetCfg():
     def install_database(self, tmp_dir):
         self.stdout.write("Installing database\n")
 
-        # Download database
-        filename = os.path.join(tmp_dir, 'unlwn21.rar')
-        url = 'http://www.ronaldomartins.pro.br/unlwordnet/database/unlwn21.rar'
-        self._download(url, filename)
+        rar_file = os.path.join(tmp_dir, 'unlwn21.rar')
+        if not os.path.isfile(rar_file):
+            # Download database
+            url = 'http://www.ronaldomartins.pro.br/unlwordnet/database/unlwn21.rar'
+            self._download(url, rar_file)
 
-        # Uncompress file
         mdb_file = os.path.join(tmp_dir, 'unlwn21.mdb')
         if not os.path.isfile(mdb_file):
+            # Uncompress file
             self.stdout.write("\tUncompressing file...\n")
             self.stdout.flush()
-            Archive(filename).extractall(tmp_dir)
+            Archive(rar_file).extractall(tmp_dir)
 
-        # Populate sqlite.db
-        if not os.path.isfile('unlwn21.db'):
-            self.stdout.write("\tMigrating database to sqlite3...\n")
-            self.stdout.flush()
-            os.system('MDB_JET3_CHARSET="cp1255" python utils/AccessDump.py %s | sqlite3 %s' % (mdb_file, 'unlwn21.db'))
+        db_file = 'unlwn21.db'
+        if not os.path.isfile(db_file):
+            # Populate sqlite.db
+            if not os.path.isfile('unlwn21.db'):
+                self.stdout.write("\tMigrating database to sqlite3...\n")
+                self.stdout.flush()
 
+                import platform
+                if platform.system() == 'Windows':
+                    print mdb_file
+                    os.system('python utils/AccessDump.py %s | sqlite3 %s' % (mdb_file, 'unlwn21.db'))
+                else:
+                    os.system('MDB_JET3_CHARSET="cp1255" python utils/AccessDump.py %s | sqlite3 %s' % (mdb_file, 'unlwn21.db'))
 
 
     def install_dependencies(self, path):
@@ -83,7 +94,7 @@ class UNLWordNetCfg():
         # AccessDump.py: utility to convert .mdb files to .sqlite3
         #   gist at https://gist.github.com/mywarr/9908044
         filename = os.path.join(path, 'AccessDump.py')
-        if not filename:
+        if not os.path.isfile(filename):
             url = 'https://gist.githubusercontent.com/mywarr/9908044/raw/f8cc70731634f44c94506106844094ac4baaf911/AccessDump.py'
             self._download(url, filename)
 
